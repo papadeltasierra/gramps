@@ -6105,11 +6105,28 @@ class PersonPages(BasePage):
         #
         # This routine is also about to go recursive!
         family_tree = self.create_family_tree(family_handle, generations)
+        print(_("+++++++++++++++++++++++++++++++++++++"))
+        def print_layout(node, n=0):
+          print(_("%s" % (' ' * n)))
+          print(_("%s" % str(node)))
+          for child in node.children:
+            print_layout(child, n+2)
+
+        print_layout(family_tree)
 
         # We now apply the Buchheim algorith to this tree, and it assigns X
         # and Y positions to all elements in the tree.
         (ltree, height, width) = buchheim(family_tree, _WIDTH, _HGAP, _HEIGHT, _VGAP)
         max_size = height + _HEIGHT
+
+
+        print(_("+++++++++++++++++++++++++++++++++++++"))
+        def print_x_y(node):
+          print(_("x, y: %d, %d" % (node.x, node.y)))
+          for child in node.children:
+            print_x_y(child)
+
+        print_x_y(ltree)
 
         # We know the height in 'Buchheim units' where every Ancestor will sit
         # precisely on an integer unit boundary.
