@@ -82,6 +82,8 @@ from textwrap import TextWrapper
 from unicodedata import normalize
 from collections import defaultdict
 from xml.sax.saxutils import escape
+from btree import BuchheimTree
+from buchheim import buchheim
 
 from operator import itemgetter
 from decimal import Decimal, getcontext
@@ -5641,7 +5643,10 @@ class PersonPages(BasePage):
 
             # display ancestor tree  
             if report.options['ancestortree']:
-                sect14 = self.display_tree()
+                if report.options['compactgraph']:
+                    sect14 = self.display_compact_tree()
+                else:
+                    sect14 = self.display_tree()
                 if sect14 is not None:
                     individualdetail += sect14
 
@@ -6040,6 +6045,149 @@ class PersonPages(BasePage):
         box = self.draw_box(center2, col, person)
         box += self.connect_line(center1, center2, col)
         return box
+
+    def create_family_tree(self, family_handle, generations):
+        """
+        Create a family tree in a format that is suitable to pass to the 
+        Buchheim algorithm.
+        """
+        family_tree = None
+        if generations:
+            if family_handle:
+                #print(_("Family handle: %s" % str(family_handle)))
+                family = self.dbase_.get_family_from_handle(family_handle)
+                #print(_("Family: %s" % str(family)))
+                f_handle = family.get_father_handle()
+                m_handle = family.get_mother_handle()
+                ff_handle = None
+                mf_handle = None
+                if f_handle:
+                  father = self.dbase_.get_person_from_handle(f_handle)
+                  ff_handle = father.get_main_parents_family_handle()
+                if m_handle:
+                  mother = self.dbase_.get_person_from_handle(m_handle)
+                  mf_handle = mother.get_main_parents_family_handle()
+                f_tree = None
+                m_tree = None
+                children = []
+                if ff_handle:
+                    f_tree = self.create_family_tree(ff_handle, generations-1)
+                    if f_tree:
+                      children.append(f_tree)
+                if mf_handle:
+                    m_tree = self.create_family_tree(mf_handle, generations-1)
+                    if m_tree:
+                      children.append(m_tree)
+                family_tree = BuchheimTree(family_handle, children)
+        return family_tree
+
+    def display_compact_tree(self):
+        """
+        Display the Ancestor tree using a Buchheim tree.
+
+        Reference: Improving Walker's Algorithm to Run in Linear time
+                   Christoph Buccheim, Michael Junger, Sebastian Leipert
+
+        This is more complex than a simple binary tree but it results in a much
+        more compact, but still sensible, layout which is especially good where
+        the tree has gaps that would otherwise result in large blank areas.           
+        """
+        tree = []
+        family_handle = self.person.get_main_parents_family_handle()
+        if not family_handle:
+            return None
+
+        generations = self.report.options['graphgens']
+
+        # Begin by building a representation of the Ancestry tree that can be
+        # fed to the Buchheim algorithm.  Note that the algorithm doesn't care
+        # who is the father and who is the mother.
+        #
+        # This routine is also about to go recursive!
+        family_tree = self.create_family_tree(family_handle, generations)
+
+        # We now apply the Buchheim algorith to this tree, and it assigns X
+        # and Y positions to all elements in the tree.
+        (ltree, height, width) = buchheim(family_tree, _WIDTH, _HGAP, _HEIGHT, _VGAP)
+        max_size = height + _HEIGHT
+
+        # We know the height in 'Buchheim units' where every Ancestor will sit
+        # precisely on an integer unit boundary.
+        #max_size = _HEIGHT*max_in_col + _VGAP*(max_in_col+1)
+        center = ltree.x
+
+        with Html("div", id="tree", class_="subsection") as tree:
+            tree += Html("h4", _('Ancestors'), inline=True)
+            with Html("div", id="treeContainer",
+                      style="width:%dpx; height:%dpx;" % (
+                          # _XOFFSET+(generations)*_WIDTH+(generations-1)*_HGAP,
+                          # max_size)
+                          width, height)
+                     ) as container:
+                tree += container
+                container += self.draw_compact_tree(
+                                     ltree, generations, max_size, 0, center)
+        return tree
+
+    def draw_compact_tree(self, l_node, gen_nr, max_size, old_center,
+                  new_center):
+        """
+        Draws the Ancestor Tree
+
+        @param: l_node        -- The layout tree node draw
+        @param: gen_nr        -- The generation number to draw
+        @param: maxgen        -- The maximum number of generations to draw
+        @param: max_size      -- The maximum size of the drawing area
+        @param: old_center    -- The position of the old box
+        @param: new_center    -- The position of the new box
+        @param: person_handle -- The handle of the person to draw
+        """
+        print(_("Gen, New center, old_center: %d, %d, %d" % (gen_nr, new_center, old_center)))
+        tree = []
+        person_handle = l_node.tree.node
+        if person_handle:
+            person = self.dbase_.get_person_from_handle(l_node.tree.node)
+        else:
+            person = None
+        if not person:
+            return tree
+
+        if gen_nr == 1:
+            tree = self.draw_box(new_center, 0, person)
+        else:
+            tree = self.draw_connected_box(old_center, new_center,
+                                           gen_nr-1, person_handle)
+
+        if gen_nr == maxgen:
+            return tree
+
+        family_handle = person.get_main_parents_family_handle()
+        if family_handle:
+            line_offset = _XOFFSET + gen_nr*_WIDTH + (gen_nr-1)*_HGAP
+            tree += self.extend_line(new_center, line_offset)
+
+            # Remember that the buchheim algorithm doesn't care about father or
+            # mother so we have to treat them identically here. However we
+            # cheat a little and treat 'father as left, mother as right' which
+            # will always get the correct parent, if they exist.
+            #
+            #f_center = new_center-gen_offset
+            family = self.dbase_.get_family_from_handle(family_handle)
+            f_handle = family.get_father_handle()
+            if f_handle:
+                fl_node = l_node.left
+                f_center = l_node.x
+                tree += self.draw_compact_tree(fl_node, gen_nr+1,
+                                       new_center, f_center)
+
+            # m_center = new_center+gen_offset
+            m_handle = family.get_mother_handle()
+            if m_handle:
+                ml_node = l_node.right
+                m_center = l_node.x
+                tree += self.draw_compact_tree(ml_node, gen_nr+1, max_size,
+                                       new_center, m_center)
+        return tree
 
     def display_tree(self):
         tree = []
@@ -7040,6 +7188,9 @@ class NavWebReport(Report):
 
         # either include the gender graphics or not?
         self.ancestortree = self.options['ancestortree']
+
+        # use compact graph format or simple binary?
+        self.compactgraph = self.options['compactgraph']
 
         # whether to display children in birthorder or entry order?
         self.birthorder = self.options['birthorder']
@@ -8224,10 +8375,15 @@ class NavWebOptions(MenuReportOptions):
         addopt( "ancestortree", self.__ancestortree )
         self.__ancestortree.connect('value-changed', self.__graph_changed)
 
-        self.__graphgens = NumberOption(_("Graph generations"), 4, 2, 5)
+        self.__graphgens = NumberOption(_("Graph generations"), 4, 2, 8)
         self.__graphgens.set_help( _("The number of generations to include in "
                                      "the ancestor graph"))
         addopt( "graphgens", self.__graphgens )
+
+        self.__compactgraph = BooleanOption(_("Generate compact graph"), False)
+        self.__compactgraph.set_help(_('Whether to generate a compact graph '
+                                       'instead of a simple binary graph'))
+        addopt( "compactgraph", self.__compactgraph )
 
         self.__graph_changed()
 
@@ -8543,6 +8699,7 @@ class NavWebOptions(MenuReportOptions):
         Handle enabling or disabling the ancestor graph
         """
         self.__graphgens.set_available(self.__ancestortree.get_value())
+        self.__compactgraph.set_available(self.__ancestortree.get_value())
 
     def __gallery_changed(self):
         """
