@@ -6046,39 +6046,51 @@ class PersonPages(BasePage):
         box += self.connect_line(center1, center2, col)
         return box
 
-    def create_family_tree(self, family_handle, generations):
+    def create_layout_tree(self, person, generations):
         """
         Create a family tree in a format that is suitable to pass to the 
         Buchheim algorithm.
         """
         family_tree = None
         if generations:
-            if family_handle:
-                #print(_("Family handle: %s" % str(family_handle)))
+            if person:
+                family_handle = person.get_main_parents_family_handle()
+                # !!PDS: Logging here?
+                #print(_("family_handle: %s" % str(family_handle)))
                 family = self.dbase_.get_family_from_handle(family_handle)
-                #print(_("Family: %s" % str(family)))
-                f_handle = family.get_father_handle()
-                m_handle = family.get_mother_handle()
-                ff_handle = None
-                mf_handle = None
-                if f_handle:
-                  father = self.dbase_.get_person_from_handle(f_handle)
-                  ff_handle = father.get_main_parents_family_handle()
-                if m_handle:
-                  mother = self.dbase_.get_person_from_handle(m_handle)
-                  mf_handle = mother.get_main_parents_family_handle()
-                f_tree = None
-                m_tree = None
+                #print(_("family: %s" % str(family)))
+                father = None
+                mother = None
                 children = []
-                if ff_handle:
-                    f_tree = self.create_family_tree(ff_handle, generations-1)
-                    if f_tree:
-                      children.append(f_tree)
-                if mf_handle:
-                    m_tree = self.create_family_tree(mf_handle, generations-1)
-                    if m_tree:
-                      children.append(m_tree)
-                family_tree = BuchheimTree(family_handle, children)
+                if family:
+                  f_handle = family.get_father_handle()
+                  m_handle = family.get_mother_handle()
+                  if f_handle:
+                    #print(_("f_handle: %s" % str(f_handle)))
+                    father = self.dbase_.get_person_from_handle(f_handle)
+                    #print(_("father: %s" % str(father)))
+                  if m_handle:
+                    #print(_("m_handle: %s" % str(m_handle)))
+                    mother = self.dbase_.get_person_from_handle(m_handle)
+                    #print(_("mother: %s" % str(mother)))
+                  #print(_("Build father tree..."))
+                  f_layout_tree = self.create_layout_tree(father, generations-1)
+                  #print(_("f_layout_tree: %s" % str(f_layout_tree)))
+                  #print(_("Build mother tree..."))
+                  m_layout_tree = self.create_layout_tree(mother, generations-1)
+                  #print(_("m_layout_tree: %s" % str(m_layout_tree)))
+                  #print(_("Parent trees done"))
+
+                  #!!PDS: Where else should I be checking against None?
+
+                  if f_layout_tree is not None:
+                    #print(_("f_layout_tree: %s" % str(f_layout_tree)))
+                    children.append(f_layout_tree)
+                  if m_layout_tree is not None:
+                    #print(_("m_layout_tree: %s" % str(m_layout_tree)))
+                    children.append(m_layout_tree)
+                family_tree = BuchheimTree(person, children)
+                #print(_("family_tree: %s" % str(family_tree)))
         return family_tree
 
     def display_compact_tree(self):
@@ -6104,25 +6116,26 @@ class PersonPages(BasePage):
         # who is the father and who is the mother.
         #
         # This routine is also about to go recursive!
-        family_tree = self.create_family_tree(family_handle, generations)
-        print(_("+++++++++++++++++++++++++++++++++++++"))
-        def print_layout(node, n=0):
-          print(_("%s" % (' ' * n)))
-          print(_("%s" % str(node)))
-          for child in node.children:
-            print_layout(child, n+2)
+        layout_tree = self.create_layout_tree(self.person, generations)
+        #print(_("+++++++++++++++++++++++++++++++++++++"))
+        #def print_layout(ltree, n=0):
+        #  print(_("%s%s" % (' ' * n, str(ltree))))
+        #  print(_("%s%s" % (' ' * n, str(ltree.children))))
+        #  for child in ltree.children:
+        #    print_layout(child, n+2)
 
-        print_layout(family_tree)
+        #print_layout(layout_tree)
 
         # We now apply the Buchheim algorith to this tree, and it assigns X
         # and Y positions to all elements in the tree.
-        (ltree, height, width) = buchheim(family_tree, _WIDTH, _HGAP, _HEIGHT, _VGAP)
-        max_size = height + _HEIGHT
+        # ltree, height, width) = buchheim(layout_tree, _WIDTH, _HGAP, _HEIGHT, _VGAP)
+        ltree = buchheim(layout_tree, _WIDTH, _HGAP, _HEIGHT, _VGAP)
+        max_size = ltree.height + _HEIGHT
 
 
         print(_("+++++++++++++++++++++++++++++++++++++"))
         def print_x_y(node):
-          print(_("x, y: %d, %d" % (node.x, node.y)))
+          print(_("x, y: %d, %d, w, h: %d, %d" % (node.x, node.y, node.width, node.height)))
           for child in node.children:
             print_x_y(child)
 
@@ -6131,7 +6144,7 @@ class PersonPages(BasePage):
         # We know the height in 'Buchheim units' where every Ancestor will sit
         # precisely on an integer unit boundary.
         #max_size = _HEIGHT*max_in_col + _VGAP*(max_in_col+1)
-        center = ltree.x
+        center = ltree.y
 
         with Html("div", id="tree", class_="subsection") as tree:
             tree += Html("h4", _('Ancestors'), inline=True)
@@ -6139,11 +6152,13 @@ class PersonPages(BasePage):
                       style="width:%dpx; height:%dpx;" % (
                           # _XOFFSET+(generations)*_WIDTH+(generations-1)*_HGAP,
                           # max_size)
-                          width, height)
+                          # ltree.width + _WIDTH, ltree.height + _HEIGHT)
+                          1000, 1000)
                      ) as container:
                 tree += container
                 container += self.draw_compact_tree(
-                                     ltree, generations, max_size, 0, center)
+                                     ltree, 1, max_size, 0, center)
+                                     # ltree, 1, max_size, 0, center)
         return tree
 
     def draw_compact_tree(self, l_node, gen_nr, max_size, old_center,
@@ -6161,25 +6176,59 @@ class PersonPages(BasePage):
         """
         print(_("Gen, New center, old_center: %d, %d, %d" % (gen_nr, new_center, old_center)))
         tree = []
-        person_handle = l_node.tree.node
-        if person_handle:
-            person = self.dbase_.get_person_from_handle(l_node.tree.node)
-        else:
-            person = None
-        if not person:
+        #person_handle = l_node.tree.node
+        #if person_handle:
+        #    person = self.dbase_.get_person_from_handle(persol_node.tree.node)
+        #else:
+        #    person = None
+        # !!PDS: Want to switch this to handles.
+        person = l_node.tree.node
+        if person is None:
             return tree
 
         if gen_nr == 1:
             tree = self.draw_box(new_center, 0, person)
         else:
             tree = self.draw_connected_box(old_center, new_center,
-                                           gen_nr-1, person_handle)
+                                           gen_nr-1, person.get_handle())
 
-        if gen_nr == maxgen:
-            return tree
+        #if gen_nr == maxgen:
+        #    return tree
 
-        family_handle = person.get_main_parents_family_handle()
-        if family_handle:
+        #family_handle = person.get_main_parents_family_handle()
+        #if family_handle:
+        #    line_offset = _XOFFSET + gen_nr*_WIDTH + (gen_nr-1)*_HGAP
+        #    tree += self.extend_line(new_center, line_offset)
+
+        #    # Remember that the buchheim algorithm doesn't care about father or
+        #    # mother so we have to treat them identically here. However we
+        #    # cheat a little and treat 'father as left, mother as right' which
+        #    # will always get the correct parent, if they exist.
+        #    #
+        #    #f_center = new_center-gen_offset
+        #    family = self.dbase_.get_family_from_handle(family_handle)
+        #    f_handle = family.get_father_handle()
+        #    if f_handle:
+        #        fl_node = l_node.left()
+        #        f_center = l_node.x
+        #        # !!PDS: What is/was max_size?
+        #        tree += self.draw_compact_tree(fl_node, gen_nr+1, max_size,
+        #                               new_center, f_center)
+
+        #    # m_center = new_center+gen_offset
+        #    m_handle = family.get_mother_handle()
+        #    if m_handle:
+        #        ml_node = l_node.right()
+        #        m_center = l_node.x
+        #        tree += self.draw_compact_tree(ml_node, gen_nr+1, max_size,
+        #                               new_center, m_center)
+
+        fl_node = l_node.left()
+        ml_node = l_node.right()
+        print(_("fl_node: %s" % str(fl_node)))
+        print(_("ml_node: %s" % str(ml_node)))
+        # !!PDS For all items, when check 0 and when check None?
+        if fl_node or ml_node:
             line_offset = _XOFFSET + gen_nr*_WIDTH + (gen_nr-1)*_HGAP
             tree += self.extend_line(new_center, line_offset)
 
@@ -6189,21 +6238,18 @@ class PersonPages(BasePage):
             # will always get the correct parent, if they exist.
             #
             #f_center = new_center-gen_offset
-            family = self.dbase_.get_family_from_handle(family_handle)
-            f_handle = family.get_father_handle()
-            if f_handle:
-                fl_node = l_node.left
-                f_center = l_node.x
-                tree += self.draw_compact_tree(fl_node, gen_nr+1,
-                                       new_center, f_center)
+            if fl_node:
+              # !!PDS: What is/was max_size?
+              tree += self.draw_compact_tree(fl_node, gen_nr+1, max_size,
+                                     new_center, fl_node.y)
+                                     # new_center, f_center)
 
             # m_center = new_center+gen_offset
-            m_handle = family.get_mother_handle()
-            if m_handle:
-                ml_node = l_node.right
-                m_center = l_node.x
-                tree += self.draw_compact_tree(ml_node, gen_nr+1, max_size,
-                                       new_center, m_center)
+            if ml_node:
+              tree += self.draw_compact_tree(ml_node, gen_nr+1, max_size,
+                                     new_center, ml_node.y)
+                                     # new_center, m_center)
+
         return tree
 
     def display_tree(self):

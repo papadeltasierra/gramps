@@ -42,7 +42,7 @@ class BuchheimTree:
     def __init__(self, node=None, children=[]):
         self.node = node
         if children:
-            self.children = children
+            self.children = list(children)
         else:
             self.children = []
 
