@@ -5947,12 +5947,18 @@ class PersonPages(BasePage):
         # return family map link to its caller
         return familymap
 
-    def draw_box(self, center, col, person):
+    def draw_xy_box(self, x, y, col, person):
         """
         draw the box around the AncestorTree Individual name box...
+
+        Note that we train the col because this has some styling connotations
+        but we no longer use col to determine the X co-ordinate.
         """
-        top = center - _HEIGHT/2
-        xoff = _XOFFSET+col*(_WIDTH+_HGAP)
+        print(_("box: (%d, %d), %d" % (x, y, col)))
+        # top = center - _HEIGHT/2
+        top = y
+        # xoff = _XOFFSET+col*(_WIDTH+_HGAP)
+        xoff = x
         sex = person.gender
         if sex == Person.MALE:
             divclass = "male"
@@ -6011,40 +6017,115 @@ class PersonPages(BasePage):
 
         return [boxbg, shadow]
 
-    def extend_line(self, y0, x0):
+    def draw_box(self, center, col, person):
+        """
+        draw the box around the AncestorTree Individual name box...
+        """
+        return self.draw_xy_box(_XOFFSET+col*(_WIDTH+_HGAP), center-_HEIGHT/2, col, person)
+
+    def draw_node_box(self, node, col, person):
+        """
+        draw the box around the AncestorTree Individual name box...
+        """
+        return self.draw_xy_box(_XOFFSET+node.x, node.y, col, person)
+
+    def extend_xy_line(self, x0, y0, w):
+        """
+        Draw a line 'half the distance out to the parents.  connect_line()
+        will then draw the horizontal to the parent and the vertical connector
+        to this line.
+
+        @param x0 -- Starting X co-ordinate for the line
+        @param y0 -- Starting Y co-ordinate for the line
+        @param w -- Width of the line
+        """
+        print(_("extend: (%d, %d), %d" % (x0, y0, w)))
         style = "top: %dpx; left: %dpx; width: %dpx"
-        bv = Html("div", class_ = "bvline", inline = True,
-                      style = style % (y0, x0, _HGAP/2)
-                    )
-        gv = Html("div", class_ = "gvline", inline = True,
-                      style = style % (y0+_SHADOW, x0, _HGAP/2+_SHADOW)
-                    )  
+        #bv = Html("div", class_="bvline", inline=True,
+        #          style=style % (y0, x0, _HGAP/2))
+        bv = Html("div", class_="bvline", inline=True,
+                  style=style % (y0, x0, w))
+        #gv = Html("div", class_="gvline", inline=True,
+        #          style=style % (y0+_SHADOW, x0, _HGAP/2+_SHADOW))
+        gv = Html("div", class_="gvline", inline=True,
+                  style=style % (y0+_SHADOW, x0, w+_SHADOW))
         return [bv, gv]
 
-    def connect_line(self, y0, y1, col):
+    def extend_node_line(self, c_node, p_node):
+        w = (p_node.x - c_node.x - _WIDTH)/2
+        print(_("px, cx, w: %d, %d, (%d) %d" % (p_node.x, c_node.x, _WIDTH, w)))
+        assert w > 0
+        return self.extend_xy_line(c_node.x+_WIDTH, c_node.y+_HEIGHT/2, w)
+
+    def extend_line(self, new_center, line_offset):
+        return self.extend_xy_line(line_offset, new_center, _HGAP/2)
+
+    # def connect_line(self, x0, y0, x1, y1, col):
+    def connect_line(self, x0, y0, x1, y1):
+        """
+        Draw the line horizontally back from the parent towards the child and
+        then the vertical connecting this line to the line drawn towards us
+        from the child.
+        """
+        print(_("connect: (%d, %d), (%d, %d)" % (x0, y0, x1, y1)))
         y = min(y0, y1)
+
+        # xh is the X co-ordinate half way between the two nodes.
+        # dx is the X gap between the two nodes, remembering that the
+        # the coordinates are for the LEFT of both nodes.
+        xh = (x1 + _WIDTH + x0)/2
+        dx = (x1 - _WIDTH - x0)/2
+        print(_("x0, x1, W, dx: %d, %d, %d, %d" % (x0, x1, _WIDTH, dx)))
+        assert dx >= 0
         stylew = "top: %dpx; left: %dpx; width: %dpx;"
         styleh = "top: %dpx; left: %dpx; height: %dpx;"
-        x0 = _XOFFSET + col * _WIDTH + (col-1)*_HGAP + _HGAP/2
-        bv = Html("div", class_ = "bvline", inline = True, style=stylew % (y1, x0, _HGAP/2))
-        gv = Html("div", class_ = "gvline", inline = True, style=stylew % 
-            (y1+_SHADOW, x0+_SHADOW, _HGAP/2+_SHADOW))
-        bh = Html("div", class_ = "bhline", inline = True, style=styleh % (y, x0, abs(y0-y1)))
-        gh = Html("div", class_ = "gvline", inline = True, style=styleh %
-                 (y+_SHADOW, x0+_SHADOW, abs(y0-y1)))
+        # x0 = _XOFFSET + col * _WIDTH + (col-1)*_HGAP + _HGAP/2
+        bv = Html("div", class_="bvline", inline=True,
+                  style=stylew % (y1, xh, dx))
+        gv = Html("div", class_="gvline", inline=True,
+                  style=stylew % (y1+_SHADOW, xh+_SHADOW, dx))
+        bh = Html("div", class_="bhline", inline=True,
+                 style=styleh % (y, xh, abs(y0-y1)))
+        gh = Html("div", class_="gvline", inline=True,
+                  style=styleh % (y+_SHADOW, xh+_SHADOW, abs(y0-y1)))
         return [bv, gv, bh, gh]
 
-    def draw_connected_box(self, center1, center2, col, handle):
+
+    def draw_xy_connected_box(self, cx, cy, px, py, col, handle):
         """
         draws the connected box for Ancestor Tree on the Individual Page
+
+        @param cx, cy -- cordinates of the child
+        @param px, py -- coordinates of the parent (ancestor) being drawn.
         """
+        print(_("c_box: (%d, %d), (%d, %d)" % (cx, cy, px, py)))
         box = []
         if not handle:
             return box
         person = self.dbase_.get_person_from_handle(handle)
-        box = self.draw_box(center2, col, person)
-        box += self.connect_line(center1, center2, col)
+        # box = self.draw_box(center2, col, person)
+        box = self.draw_xy_box(px, py+_HGAP/2, col, person)
+        box += self.connect_line(cx, cy+_HEIGHT/2, px, py+_HEIGHT/2)
         return box
+
+
+    def draw_connected_box(self, y1, y2, col, handle):
+        assert col > 0
+        x1 = _XOFFSET + (col -1) * _WIDTH + (col-1)*_HGAP
+        x2 = x1 + _WIDTH + _HGAP
+        # x2 = _XOFFSET + col * _WIDTH + (col-1)*_HGAP + _HGAP/2
+        return self.draw_xy_connected_box(x1, y1-_HEIGHT/2, x2, y2-_HEIGHT/2, col, handle)
+
+
+    def draw_node_connected_box(self, p_node, c_node, col, handle):
+      """
+      @param p_node -- Parent node to draw and connect from
+      @param c_node -- Child node to connect towards
+      @param handle -- Parent node handle
+      @param col    -- Stylistic hint.
+      """
+      return self.draw_xy_connected_box(c_node.x, c_node.y, p_node.x, p_node.y, col, handle)
+
 
     def create_layout_tree(self, person, generations):
         """
@@ -6157,24 +6238,24 @@ class PersonPages(BasePage):
                      ) as container:
                 tree += container
                 container += self.draw_compact_tree(
-                                     ltree, 1, max_size, 0, center)
+                                     ltree, 1, max_size, None)
                                      # ltree, 1, max_size, 0, center)
         return tree
 
-    def draw_compact_tree(self, l_node, gen_nr, max_size, old_center,
-                  new_center):
+    def draw_compact_tree(self, l_node, gen_nr, max_size, c_node):
         """
         Draws the Ancestor Tree
 
-        @param: l_node        -- The layout tree node draw
+        @param: l_node        -- The layout tree node to draw
         @param: gen_nr        -- The generation number to draw
         @param: maxgen        -- The maximum number of generations to draw
         @param: max_size      -- The maximum size of the drawing area
         @param: old_center    -- The position of the old box
         @param: new_center    -- The position of the new box
         @param: person_handle -- The handle of the person to draw
+        @param: c_node        -- Child node of this parent
         """
-        print(_("Gen, New center, old_center: %d, %d, %d" % (gen_nr, new_center, old_center)))
+        # print(_("Gen, New center, old_center: %d, %d, %d" % (gen_nr, new_center, old_center)))
         tree = []
         #person_handle = l_node.tree.node
         #if person_handle:
@@ -6187,9 +6268,9 @@ class PersonPages(BasePage):
             return tree
 
         if gen_nr == 1:
-            tree = self.draw_box(new_center, 0, person)
+            tree = self.draw_node_box(l_node, 0, person)
         else:
-            tree = self.draw_connected_box(old_center, new_center,
+            tree = self.draw_node_connected_box(l_node, c_node, 
                                            gen_nr-1, person.get_handle())
 
         #if gen_nr == maxgen:
@@ -6223,6 +6304,9 @@ class PersonPages(BasePage):
         #        tree += self.draw_compact_tree(ml_node, gen_nr+1, max_size,
         #                               new_center, m_center)
 
+        # !!PDS: This doesn't work because if there is a single node, it
+        # is returned in both left and right!  Probably need to add None as
+        # an option :-(.
         fl_node = l_node.left()
         ml_node = l_node.right()
         print(_("fl_node: %s" % str(fl_node)))
@@ -6230,7 +6314,10 @@ class PersonPages(BasePage):
         # !!PDS For all items, when check 0 and when check None?
         if fl_node or ml_node:
             line_offset = _XOFFSET + gen_nr*_WIDTH + (gen_nr-1)*_HGAP
-            tree += self.extend_line(new_center, line_offset)
+            if fl_node:
+                tree += self.extend_node_line(l_node, fl_node)
+            else:
+                tree += self.extend_node_line(l_node, ml_node)
 
             # Remember that the buchheim algorithm doesn't care about father or
             # mother so we have to treat them identically here. However we
@@ -6241,13 +6328,13 @@ class PersonPages(BasePage):
             if fl_node:
               # !!PDS: What is/was max_size?
               tree += self.draw_compact_tree(fl_node, gen_nr+1, max_size,
-                                     new_center, fl_node.y)
+                                     l_node)
                                      # new_center, f_center)
 
             # m_center = new_center+gen_offset
             if ml_node:
               tree += self.draw_compact_tree(ml_node, gen_nr+1, max_size,
-                                     new_center, ml_node.y)
+                                     l_node)
                                      # new_center, m_center)
 
         return tree

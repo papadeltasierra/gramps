@@ -138,20 +138,20 @@ def third_walk(tree, n):
         third_walk(c, n)
 
 
-def firstwalk(v, node_height=1., v_separation=1.):
+def firstwalk(v, node_height, v_separation):
     """
     Determine horizontal positions.
     """
     if len(v.children) == 0:
         if v.lmost_sibling:
-            v.y = v.lbrother().y + v_separation
+            v.y = v.lbrother().y + node_height + v_separation
         else:
             v.y = 0.
     else:
         default_ancestor = v.children[0]
         for w in v.children:
             firstwalk(w, node_height, v_separation)
-            default_ancestor = apportion(w, default_ancestor, v_separation)
+            default_ancestor = apportion(w, default_ancestor, node_height+v_separation)
             v.height = max(v.height, w.height)
             assert v.width >= w.width
         # print "finished v =", v.tree, "children"
@@ -161,7 +161,7 @@ def firstwalk(v, node_height=1., v_separation=1.):
 
         w = v.lbrother()
         if w:
-            v.y = w.y + v_separation
+            v.y = w.y + node_height + v_separation
             v.mod = v.y - midpoint
         else:
             v.y = midpoint
@@ -249,8 +249,8 @@ def second_walk(v, modifier=0, h_separation=0, width=0, min=None):
     Note that some of this code is modified to orientate the root node 'west'
     instead of 'north' in the Bushheim algorithms.
     """
-    v.y -= modifier
-    v.x -= width
+    v.y += modifier
+    v.x += width
 
     if min is None or v.x < min:
         min = v.x
