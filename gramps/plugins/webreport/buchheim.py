@@ -94,6 +94,16 @@ class DrawTree(object):
     def right(self):
         return self.thread or len(self.children) and self.children[-1]
 
+    def father(self):
+        if len(self.children) and self.children[0] and self.children[0].tree.father:
+            return self.children[0]
+        return None
+
+    def mother(self):
+        if len(self.children) and self.children[-1] and not self.children[-1].tree.father:
+            return self.children[-1]
+        return None
+
     def lbrother(self):
         n = None
         if self.parent:

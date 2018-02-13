@@ -6104,7 +6104,8 @@ class PersonPages(BasePage):
             return box
         person = self.dbase_.get_person_from_handle(handle)
         # box = self.draw_box(center2, col, person)
-        box = self.draw_xy_box(px, py+_HGAP/2, col, person)
+        # box = self.draw_xy_box(px, py+_HGAP/2, col, person)
+        box = self.draw_xy_box(px, py, col, person)
         box += self.connect_line(cx, cy+_HEIGHT/2, px, py+_HEIGHT/2)
         return box
 
@@ -6170,7 +6171,7 @@ class PersonPages(BasePage):
                   if m_layout_tree is not None:
                     #print(_("m_layout_tree: %s" % str(m_layout_tree)))
                     children.append(m_layout_tree)
-                family_tree = BuchheimTree(person, children)
+                family_tree = BuchheimTree(person, (person.gender == person.MALE), children)
                 #print(_("family_tree: %s" % str(family_tree)))
         return family_tree
 
@@ -6307,8 +6308,8 @@ class PersonPages(BasePage):
         # !!PDS: This doesn't work because if there is a single node, it
         # is returned in both left and right!  Probably need to add None as
         # an option :-(.
-        fl_node = l_node.left()
-        ml_node = l_node.right()
+        fl_node = l_node.father()
+        ml_node = l_node.mother()
         print(_("fl_node: %s" % str(fl_node)))
         print(_("ml_node: %s" % str(ml_node)))
         # !!PDS For all items, when check 0 and when check None?

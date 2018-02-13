@@ -39,8 +39,10 @@ Classe:
     BuchheimTree - A tree suitable for passing to the Bushheim layout algorithm
 """
 class BuchheimTree:
-    def __init__(self, node=None, children=[]):
+    # !!PDS: Should be 'male' not father.  What about same-sex?
+    def __init__(self, node=None, father=True, children=[]):
         self.node = node
+        self.father = father
         if children:
             self.children = list(children)
         else:
