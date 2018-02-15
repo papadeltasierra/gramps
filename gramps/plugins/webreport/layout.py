@@ -38,15 +38,13 @@ Narrative Web Page generator.
 Classe:
     BuchheimTree - A tree suitable for passing to the Bushheim layout algorithm
 """
-class BuchheimTree:
-    # !!PDS: Should be 'male' not father.  What about same-sex?
-    def __init__(self, node=None, father=True, children=[]):
+class LayoutTree:
+    def __init__(self, node=None, parent1=None, parent2=None):
         self.node = node
-        self.father = father
-        if children:
-            self.children = list(children)
-        else:
-            self.children = []
+        self.children = []
+        for parent in [parent1, parent2]:
+            if parent is not None:
+                self.children.append(parent)
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, slice):
