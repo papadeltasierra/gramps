@@ -74,6 +74,8 @@ from gramps.plugins.webreport.common import (get_first_letters, _KEYPERSON,
                                              MARKER_PATH, OSM_MARKERS,
                                              GOOGLE_MAPS, MARKERS, html_escape,
                                              DROPMASTERS, FAMILYLINKS)
+from gramps.plugins.webreport.layout import LayoutTree
+from gramps.plugins.webreport.buchheim import buchheim
 
 _ = glocale.translation.sgettext
 LOG = logging.getLogger(".NarrativeWeb")
@@ -85,6 +87,7 @@ _VGAP = 10
 _HGAP = 30
 _SHADOW = 5
 _XOFFSET = 5
+_YOFFSET = 5
 
 #################################################
 #
@@ -585,9 +588,12 @@ class PersonPages(BasePage):
             if sect13 is not None:
                 individualdetail += sect13
 
-            # display ancestor tree
+            # display ancestor tree  
             if report.options['ancestortree']:
-                sect14 = self.display_tree()
+                if report.options['compactgraph']:
+                    sect14 = self.display_compact_tree()
+                else:
+                    sect14 = self.display_tree()
                 if sect14 is not None:
                     individualdetail += sect14
 
@@ -937,7 +943,7 @@ class PersonPages(BasePage):
         # return family map link to its caller
         return familymap
 
-    def draw_box(self, center, col, person):
+    def Xdraw_box(self, center, col, person):
         """
         Draw the box around the AncestorTree Individual name box...
 
@@ -1017,7 +1023,7 @@ class PersonPages(BasePage):
 
         return [boxbg, shadow]
 
-    def extend_line(self, coord_y0, coord_x0):
+    def Xextend_line(self, coord_y0, coord_x0):
         """
         Draw and extended line
 
@@ -1034,7 +1040,7 @@ class PersonPages(BasePage):
                      )
         return [ext_bv, ext_gv]
 
-    def connect_line(self, coord_y0, coord_y1, col):
+    def Xconnect_line(self, coord_y0, coord_y1, col):
         """
         We need to draw a line between to points
 
@@ -1061,7 +1067,7 @@ class PersonPages(BasePage):
                                        abs(coord_y0-coord_y1)))
         return [cnct_bv, cnct_gv, cnct_bh, cnct_gh]
 
-    def draw_connected_box(self, center1, center2, col, handle):
+    def Xdraw_connected_box(self, center1, center2, col, handle):
         """
         Draws the connected box for Ancestor Tree on the Individual Page
 
@@ -1077,6 +1083,305 @@ class PersonPages(BasePage):
         box = self.draw_box(center2, col, person)
         box += self.connect_line(center1, center2, col)
         return box
+
+    def draw_xy_box(self, x, y, col, person):
+        """
+        draw the box around the AncestorTree Individual name box...
+
+        Note that we train the col because this has some styling connotations
+        but we no longer use col to determine the X co-ordinate.
+        """
+        top = y
+        xoff = x
+        sex = person.gender
+        if sex == Person.MALE:
+            divclass = "male"
+        elif sex == Person.FEMALE:
+            divclass = "female"
+        else:
+            divclass = "unknown"
+
+        boxbg = Html("div", class_="boxbg %s AncCol%s" % (divclass, col),
+                     style="top: %dpx; left: %dpx;" % (top, xoff + 1))
+
+        person_name = self.get_name(person)
+        # This does not use [new_]person_link because the requirements are
+        # unique
+        result = self.report.obj_dict.get(Person).get(person.handle)
+        if result is None or result[0] == "":
+            # The person is not included in the webreport or there is no link
+            # to them
+            boxbg += Html(
+                "span", person_name, class_="unlinked", inline=True)
+        else:
+            thumbnailUrl = None
+            if self.create_media and col < 5:
+                photolist = person.get_media_list()
+                if photolist:
+                    photo_handle = photolist[0].get_reference_handle()
+                    photo = self.dbase_.get_object_from_handle(photo_handle)
+                    mime_type = photo.get_mime_type()
+                    if mime_type:
+                        region = self.media_ref_region_to_object(
+                            photo_handle, person)
+                        if region:
+                            # make a thumbnail of this region
+                            newpath = copy_thumbnail(
+                                self.report, photo_handle, photo, region)
+                            # TODO. Check if build_url_fname can be used.
+                            newpath = "/".join(['..']*3 + [newpath])
+                            if win():
+                                newpath = newpath.replace('\\', "/")
+                            thumbnailUrl = newpath
+                            #snapshot += self.media_link(
+                            #    photo_handle, newpath, '', uplink=True)
+                        else:
+                            (photoUrl, thumbnailUrl) = \
+                                self.report.prepare_copy_media(photo)
+                            thumbnailUrl = "/".join(['..']*3 + [thumbnailUrl])
+                            if win():
+                                thumbnailUrl = thumbnailUrl.replace('\\', "/")
+            url = self.report.build_url_fname_html(person.handle, "ppl", True)
+            if thumbnailUrl is None:
+                boxbg += Html("a", href=url, class_="noThumb") + person_name
+            else:
+                thumb = Html("span", class_="thumbnail") + \
+                    (Html("img", src=thumbnailUrl, alt="Image: "
+                          + person_name))
+                boxbg += Html("a", href=url) + thumb + person_name
+        shadow = Html("div", class_="shadow", inline=True,
+                      style="top: %dpx; left: %dpx;"
+                      % (top + _SHADOW, xoff + _SHADOW))
+
+        return [boxbg, shadow]
+
+    def draw_box(self, center, col, person):
+        """
+        draw the box around the AncestorTree Individual name box...
+        """
+
+        # Note that we are not using _YOFFSET for simple trees because
+        # the simple tree algorithm naturally leaves some border at the
+        # top and bottom of the tree.
+        return self.draw_xy_box(
+            _XOFFSET+col*(_WIDTH+_HGAP), center-_HEIGHT/2, col, person)
+
+    def draw_node_box(self, node, col, person):
+        """
+        draw the box around the AncestorTree Individual name box...
+        """
+        return self.draw_xy_box(_XOFFSET+node.x, _YOFFSET+node.y, col, person)
+
+    def extend_xy_line(self, x0, y0, w):
+        """
+        Draw a line 'half the distance out to the parents.  connect_line()
+        will then draw the horizontal to the parent and the vertical connector
+        to this line.
+
+        @param x0 -- Starting X co-ordinate for the line
+        @param y0 -- Starting Y co-ordinate for the line
+        @param w -- Width of the line
+        """
+        style = "top: %dpx; left: %dpx; width: %dpx"
+        bv = Html("div", class_="bvline", inline=True,
+                  style=style % (y0, x0, w))
+        gv = Html("div", class_="gvline", inline=True,
+                  style=style % (y0+_SHADOW, x0, w+_SHADOW))
+        return [bv, gv]
+
+    def extend_node_line(self, c_node, p_node):
+        w = (p_node.x - c_node.x - _WIDTH)/2
+        assert w > 0
+        return self.extend_xy_line(
+            _XOFFSET + c_node.x + _WIDTH, c_node.y + _HEIGHT/2 + _VGAP/2, w)
+
+    def extend_line(self, new_center, line_offset):
+        return self.extend_xy_line(line_offset, new_center, _HGAP/2)
+
+    def connect_line(self, cx, cy, px, py):
+        """
+        Draw the line horizontally back from the parent towards the child and
+        then the vertical connecting this line to the line drawn towards us
+        from the child.
+
+        @param: cx -- X coordinate for the child
+        @param: cy -- Y coordinate for the child
+        @param: px -- X coordinate for the parent
+        @param: py -- Y coordinate for the parent
+        """
+        y = min(cy, py)
+
+        # xh is the X co-ordinate half way between the two nodes.
+        # dx is the X gap between the two nodes, remembering that the
+        # the coordinates are for the LEFT of both nodes.
+        xh = (px + _WIDTH + cx)/2
+        dx = (px - _WIDTH - cx)/2
+        assert dx >= 0
+        stylew = "top: %dpx; left: %dpx; width: %dpx;"
+        styleh = "top: %dpx; left: %dpx; height: %dpx;"
+        bv = Html("div", class_="bvline", inline=True,
+                  style=stylew % (py, xh, dx))
+        gv = Html("div", class_="gvline", inline=True,
+                  style=stylew % (py + _SHADOW, xh + _SHADOW, dx))
+        bh = Html("div", class_="bhline", inline=True,
+                  style=styleh % (y, xh, abs(py - cy)))
+        gh = Html("div", class_="gvline", inline=True,
+                  style=styleh % (y + _SHADOW, xh + _SHADOW, abs(py - cy)))
+        return [bv, gv, bh, gh]
+
+    def draw_xy_connected_box(self, cx, cy, px, py, col, person):
+        """
+        draws the connected box for Ancestor Tree on the Individual Page
+
+        @param: cx, cy -- coordinates of the child
+        @param: px, py -- coordinates of the parent (ancestor) being drawn.
+        @param: col    -- generation; hint for HTML styles
+        @param: person -- person for whom we are drawing the box
+        """
+        box = []
+        if person is None:
+            return box
+        box = self.draw_xy_box(px, py, col, person)
+        box += self.connect_line(
+            cx, cy+_HEIGHT/2, px, py+_HEIGHT/2)
+        return box
+
+    def draw_connected_box(self, y1, y2, gen, person):
+        """
+        draws the connected box for Ancestor Tree on the Individual Page
+
+        @param: y1     -- Y coordinate (centre) of the child
+        @param: y2     -- Y coordinate (centre) of the parent (ancestor) being
+                          drawn.
+        @param: gen    -- generation; hint for HTML styles and determines X
+                          positions.
+        @param: person -- person for whom we are drawing the box
+        """
+        assert gen > 0
+        x1 = _XOFFSET + (gen - 1) * _WIDTH + (gen - 1) * _HGAP
+        x2 = x1 + _WIDTH + _HGAP
+
+        # Note that we are not using _YOFFSET for simple trees because
+        # the simple tree algorithm naturally leaves some border at the
+        # top and bottom of the tree.
+        return self.draw_xy_connected_box(
+            x1, y1-_HEIGHT/2, x2, y2-_HEIGHT/2, gen, person)
+
+    def draw_node_connected_box(self, p_node, c_node, gen, person):
+        """
+        @param: p_node -- Parent node to draw and connect from
+        @param: c_node -- Child node to connect towards
+        @param: gen    -- Generation providing an HTML style hint
+        @param: handle -- Parent node handle
+        """
+        return self.draw_xy_connected_box(
+            _XOFFSET+c_node.x, _YOFFSET+c_node.y, _XOFFSET+p_node.x, _YOFFSET+p_node.y, gen, person)
+
+    def create_layout_tree(self, p_handle, generations):
+        """
+        Create a family subtree in a format that is suitable to pass to
+        the Buchheim algorithm.
+
+        @param: p_handle   -- Handle for person at root of this subtree
+        @param: generation -- Generations left to add to tree.
+        """
+        family_tree = None
+        if generations:
+            if p_handle:
+                person = self.dbase_.get_person_from_handle(p_handle)
+                if person is None:
+                    return None
+                family_handle = person.get_main_parents_family_handle()
+                family = self.dbase_.get_family_from_handle(family_handle)
+                f_layout_tree = None
+                m_layout_tree = None
+                if family is not None:
+                    f_handle = family.get_father_handle()
+                    m_handle = family.get_mother_handle()
+                    f_layout_tree = self.create_layout_tree(
+                        f_handle, generations-1)
+                    m_layout_tree = self.create_layout_tree(
+                        m_handle, generations-1)
+
+                family_tree = LayoutTree(
+                    p_handle, f_layout_tree, m_layout_tree)
+        return family_tree
+
+    def display_compact_tree(self):
+        """
+        Display the Ancestor tree using a Buchheim tree.
+
+        Reference: Improving Walker's Algorithm to Run in Linear time
+                   Christoph Buccheim, Michael Junger, Sebastian Leipert
+
+        This is more complex than a simple binary tree but it results in a much
+        more compact, but still sensible, layout which is especially good where
+        the tree has gaps that would otherwise result in large blank areas.
+        """
+        family_handle = self.person.get_main_parents_family_handle()
+        if not family_handle:
+            return None
+
+        generations = self.report.options['graphgens']
+
+        # Begin by building a representation of the Ancestry tree that can be
+        # fed to the Buchheim algorithm.  Note that the algorithm doesn't care
+        # who is the father and who is the mother.
+        #
+        # This routine is also about to go recursive!
+        layout_tree = self.create_layout_tree(
+            self.person.get_handle(), generations)
+
+        # We now apply the Buchheim algorith to this tree, and it assigns X
+        # and Y positions to all elements in the tree.
+        l_tree = buchheim(layout_tree, _WIDTH, _HGAP, _HEIGHT, _VGAP)
+
+        # We know the height in 'pixels' where every Ancestor will sit
+        # precisely on an integer unit boundary.
+        with Html("div", id="tree", class_="subsection") as tree:
+            tree += Html("h4", _('Ancestors'), inline=True)
+            with Html("div", id="treeContainer",
+                      style="width:%dpx; height:%dpx;" % (
+                          l_tree.width + _XOFFSET + _WIDTH,
+                          l_tree.height + _HEIGHT + _VGAP)
+                      ) as container:
+                    tree += container
+                    container += self.draw_compact_tree(
+                        l_tree, 1, None)
+
+        return tree
+
+    def draw_compact_tree(self, l_node, gen_nr, c_node):
+        """
+        Draws the Ancestor Tree
+
+        @param: l_node        -- The tree node to draw
+        @param: gen_nr        -- The generation number to draw
+        @param: c_node        -- Child node of this parent
+        """
+        tree = []
+        person = self.dbase_.get_person_from_handle(l_node.handle())
+        if person is None:
+            return None
+
+        if gen_nr == 1:
+            tree = self.draw_node_box(l_node, 0, person)
+        else:
+            tree = self.draw_node_connected_box(
+                l_node, c_node, gen_nr-1, person)
+
+        # If there are any parents, we need to draw the extend line. We only
+        # use the parent to define the end of the line so either will do and
+        # we know we have at least one of this test passes.
+        if l_node.children:
+            tree += self.extend_node_line(l_node, l_node.children[0])
+
+            # The parents are equivalent and the drawing routine figures out
+            # whether they are male or female.
+            for p_node in l_node.children:
+                tree += self.draw_compact_tree(p_node, gen_nr+1, l_node)
+
+        return tree
 
     def display_tree(self):
         """

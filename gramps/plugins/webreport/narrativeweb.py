@@ -220,6 +220,9 @@ class NavWebReport(Report):
         # either include the gender graphics or not?
         self.ancestortree = self.options['ancestortree']
 
+        # use compact graph format or simple binary?
+        self.compactgraph = self.options['compactgraph']
+
         # whether to display children in birthorder or entry order?
         self.birthorder = self.options['birthorder']
 
@@ -1554,6 +1557,7 @@ class NavWebOptions(MenuReportOptions):
         self.__googleopts = None
         self.__googlemapkey = None
         self.__ancestortree = None
+        self.__compacttree = None
         self.__css = None
         self.__dl_descr1 = None
         self.__dl_descr2 = None
@@ -1699,10 +1703,16 @@ class NavWebOptions(MenuReportOptions):
         addopt("ancestortree", self.__ancestortree)
         self.__ancestortree.connect('value-changed', self.__graph_changed)
 
-        self.__graphgens = NumberOption(_("Graph generations"), 4, 2, 5)
+        self.__graphgens = NumberOption(_("Graph generations"), 4, 2, 99)
         self.__graphgens.set_help(_("The number of generations to include in "
                                     "the ancestor graph"))
         addopt("graphgens", self.__graphgens)
+
+        self.__compactgraph = BooleanOption(_("Generate compact graph"), False)
+        self.__compactgraph.set_help(_('Whether to generate a compact graph '
+                                       'instead of a simple binary graph'))
+        addopt( "compactgraph", self.__compactgraph )
+
         self.__graph_changed()
 
         self.__securesite = BooleanOption(_("This is a secure site (https)"),
@@ -2167,6 +2177,7 @@ class NavWebOptions(MenuReportOptions):
         Handle enabling or disabling the ancestor graph
         """
         self.__graphgens.set_available(self.__ancestortree.get_value())
+        self.__compactgraph.set_available(self.__ancestortree.get_value())
 
     def __gallery_changed(self):
         """
