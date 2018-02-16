@@ -434,6 +434,7 @@ _VGAP = 10
 _HGAP = 30
 _SHADOW = 5
 _XOFFSET = 5
+_YOFFSET = 5
 _WRONGMEDIAPATH = []
 
 _NAME_STYLE_SHORT = 2
@@ -6022,6 +6023,10 @@ class PersonPages(BasePage):
         """
         draw the box around the AncestorTree Individual name box...
         """
+
+        # Note that we are not using _YOFFSET for simple trees because
+        # the simple tree algorithm naturally leaves some border at the
+        # top and bottom of the tree.
         return self.draw_xy_box(
             _XOFFSET+col*(_WIDTH+_HGAP), center-_HEIGHT/2, col, person)
 
@@ -6029,7 +6034,7 @@ class PersonPages(BasePage):
         """
         draw the box around the AncestorTree Individual name box...
         """
-        return self.draw_xy_box(node.x+_XOFFSET, node.y+_VGAP/2, col, person)
+        return self.draw_xy_box(_XOFFSET+node.x, _YOFFSET+node.y, col, person)
 
     def extend_xy_line(self, x0, y0, w):
         """
@@ -6052,7 +6057,7 @@ class PersonPages(BasePage):
         w = (p_node.x - c_node.x - _WIDTH)/2
         assert w > 0
         return self.extend_xy_line(
-            c_node.x + _WIDTH, c_node.y + _HEIGHT/2 + _VGAP/2, w)
+            _XOFFSET + c_node.x + _WIDTH, c_node.y + _HEIGHT/2 + _VGAP/2, w)
 
     def extend_line(self, new_center, line_offset):
         return self.extend_xy_line(line_offset, new_center, _HGAP/2)
@@ -6100,9 +6105,9 @@ class PersonPages(BasePage):
         box = []
         if person is None:
             return box
-        box = self.draw_xy_box(px, py + _VGAP/2, col, person)
+        box = self.draw_xy_box(px, py, col, person)
         box += self.connect_line(
-            cx, cy + _HEIGHT/2 + _VGAP/2, px, py+_HEIGHT/2 + _VGAP/2)
+            cx, cy+_HEIGHT/2, px, py+_HEIGHT/2)
         return box
 
     def draw_connected_box(self, y1, y2, gen, person):
@@ -6119,6 +6124,10 @@ class PersonPages(BasePage):
         assert gen > 0
         x1 = _XOFFSET + (gen - 1) * _WIDTH + (gen - 1) * _HGAP
         x2 = x1 + _WIDTH + _HGAP
+
+        # Note that we are not using _YOFFSET for simple trees because
+        # the simple tree algorithm naturally leaves some border at the
+        # top and bottom of the tree.
         return self.draw_xy_connected_box(
             x1, y1-_HEIGHT/2, x2, y2-_HEIGHT/2, gen, person)
 
@@ -6130,7 +6139,7 @@ class PersonPages(BasePage):
         @param: handle -- Parent node handle
         """
         return self.draw_xy_connected_box(
-            c_node.x, c_node.y, p_node.x, p_node.y, gen, person)
+            _XOFFSET+c_node.x, _YOFFSET+c_node.y, _XOFFSET+p_node.x, _YOFFSET+p_node.y, gen, person)
 
     def create_layout_tree(self, p_handle, generations):
         """
