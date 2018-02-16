@@ -139,41 +139,42 @@ class MediaPages(BasePage):
                     self.r_db.get_media_from_handle(x)))
             prev = None
             total = len(sorted_media_handles)
-            index = 1
-            for handle in sorted_media_handles:
-                gc.collect() # Reduce memory usage when there are many images.
-                if index == media_count:
-                    next_ = None
-                elif index < total:
-                    next_ = sorted_media_handles[index]
-                elif len(self.unused_media_handles) > 0:
-                    next_ = self.unused_media_handles[0]
-                else:
-                    next_ = None
-                self.mediapage(self.report, title,
-                               handle, (prev, next_, index, media_count))
-                prev = handle
-                step()
-                index += 1
-
-            total = len(self.unused_media_handles)
-            idx = 1
-            prev = sorted_media_handles[len(sorted_media_handles)-1]
-            if total > 0:
-                for media_handle in self.unused_media_handles:
-                    media = self.r_db.get_media_from_handle(media_handle)
-                    gc.collect() # Reduce memory usage when many images.
+            if total:
+                index = 1
+                for handle in sorted_media_handles:
+                    gc.collect() # Reduce memory usage when there are many images.
                     if index == media_count:
                         next_ = None
+                    elif index < total:
+                        next_ = sorted_media_handles[index]
+                    elif len(self.unused_media_handles) > 0:
+                        next_ = self.unused_media_handles[0]
                     else:
-                        next_ = self.unused_media_handles[idx]
+                        next_ = None
                     self.mediapage(self.report, title,
-                                   media_handle,
-                                   (prev, next_, index, media_count))
-                    prev = media_handle
+                                   handle, (prev, next_, index, media_count))
+                    prev = handle
                     step()
                     index += 1
-                    idx += 1
+
+                total = len(self.unused_media_handles)
+                idx = 1
+                prev = sorted_media_handles[len(sorted_media_handles)-1]
+                if total > 0:
+                    for media_handle in self.unused_media_handles:
+                        media = self.r_db.get_media_from_handle(media_handle)
+                        gc.collect() # Reduce memory usage when many images.
+                        if index == media_count:
+                            next_ = None
+                        else:
+                            next_ = self.unused_media_handles[idx]
+                        self.mediapage(self.report, title,
+                                       media_handle,
+                                       (prev, next_, index, media_count))
+                        prev = media_handle
+                        step()
+                        index += 1
+                        idx += 1
 
         self.medialistpage(self.report, title, sorted_media_handles)
 

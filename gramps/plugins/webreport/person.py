@@ -943,7 +943,7 @@ class PersonPages(BasePage):
         # return family map link to its caller
         return familymap
 
-    def Xdraw_box(self, center, col, person):
+    def draw_xy_box(self, xoff, top, col, person):
         """
         Draw the box around the AncestorTree Individual name box...
 
@@ -951,9 +951,7 @@ class PersonPages(BasePage):
         @param: col    -- The generation number
         @param: person -- The person to set in the box
         """
-        top = center - _HEIGHT/2
-        xoff = _XOFFSET+col*(_WIDTH+_HGAP)
-        sex = person.gender
+        sex = person.get_gender()
         if sex == Person.MALE:
             divclass = "male"
         elif sex == Person.FEMALE:
@@ -1023,138 +1021,6 @@ class PersonPages(BasePage):
 
         return [boxbg, shadow]
 
-    def Xextend_line(self, coord_y0, coord_x0):
-        """
-        Draw and extended line
-
-        @param: coord_y0 -- The starting point
-        @param: coord_x0 -- The end of the line
-        """
-        style = "top: %dpx; left: %dpx; width: %dpx"
-        ext_bv = Html("div", class_="bvline", inline=True,
-                      style=style % (coord_y0, coord_x0, _HGAP/2)
-                     )
-        ext_gv = Html("div", class_="gvline", inline=True,
-                      style=style % (coord_y0+_SHADOW,
-                                     coord_x0, _HGAP/2+_SHADOW)
-                     )
-        return [ext_bv, ext_gv]
-
-    def Xconnect_line(self, coord_y0, coord_y1, col):
-        """
-        We need to draw a line between to points
-
-        @param: coord_y0 -- The starting point
-        @param: coord_y1 -- The end of the line
-        @param: col      -- The generation number
-        """
-        coord_y = min(coord_y0, coord_y1)
-        stylew = "top: %dpx; left: %dpx; width: %dpx;"
-        styleh = "top: %dpx; left: %dpx; height: %dpx;"
-        coord_x0 = _XOFFSET + col * _WIDTH + (col-1)*_HGAP + _HGAP/2
-        cnct_bv = Html("div", class_="bvline", inline=True,
-                       style=stylew % (coord_y1, coord_x0, _HGAP/2))
-        cnct_gv = Html("div", class_="gvline", inline=True,
-                       style=stylew % (coord_y1+_SHADOW,
-                                       coord_x0+_SHADOW,
-                                       _HGAP/2+_SHADOW))
-        cnct_bh = Html("div", class_="bhline", inline=True,
-                       style=styleh % (coord_y, coord_x0,
-                                       abs(coord_y0-coord_y1)))
-        cnct_gh = Html("div", class_="gvline", inline=True,
-                       style=styleh % (coord_y+_SHADOW,
-                                       coord_x0+_SHADOW,
-                                       abs(coord_y0-coord_y1)))
-        return [cnct_bv, cnct_gv, cnct_bh, cnct_gh]
-
-    def Xdraw_connected_box(self, center1, center2, col, handle):
-        """
-        Draws the connected box for Ancestor Tree on the Individual Page
-
-        @param: center1 -- The first box to connect
-        @param: center2 -- The destination box to draw
-        @param: col     -- The generation number
-        @param: handle  -- The handle of the person to set in the new box
-        """
-        box = []
-        if not handle:
-            return box
-        person = self.r_db.get_person_from_handle(handle)
-        box = self.draw_box(center2, col, person)
-        box += self.connect_line(center1, center2, col)
-        return box
-
-    def draw_xy_box(self, x, y, col, person):
-        """
-        draw the box around the AncestorTree Individual name box...
-
-        Note that we train the col because this has some styling connotations
-        but we no longer use col to determine the X co-ordinate.
-        """
-        top = y
-        xoff = x
-        sex = person.gender
-        if sex == Person.MALE:
-            divclass = "male"
-        elif sex == Person.FEMALE:
-            divclass = "female"
-        else:
-            divclass = "unknown"
-
-        boxbg = Html("div", class_="boxbg %s AncCol%s" % (divclass, col),
-                     style="top: %dpx; left: %dpx;" % (top, xoff + 1))
-
-        person_name = self.get_name(person)
-        # This does not use [new_]person_link because the requirements are
-        # unique
-        result = self.report.obj_dict.get(Person).get(person.handle)
-        if result is None or result[0] == "":
-            # The person is not included in the webreport or there is no link
-            # to them
-            boxbg += Html(
-                "span", person_name, class_="unlinked", inline=True)
-        else:
-            thumbnailUrl = None
-            if self.create_media and col < 5:
-                photolist = person.get_media_list()
-                if photolist:
-                    photo_handle = photolist[0].get_reference_handle()
-                    photo = self.dbase_.get_object_from_handle(photo_handle)
-                    mime_type = photo.get_mime_type()
-                    if mime_type:
-                        region = self.media_ref_region_to_object(
-                            photo_handle, person)
-                        if region:
-                            # make a thumbnail of this region
-                            newpath = copy_thumbnail(
-                                self.report, photo_handle, photo, region)
-                            # TODO. Check if build_url_fname can be used.
-                            newpath = "/".join(['..']*3 + [newpath])
-                            if win():
-                                newpath = newpath.replace('\\', "/")
-                            thumbnailUrl = newpath
-                            #snapshot += self.media_link(
-                            #    photo_handle, newpath, '', uplink=True)
-                        else:
-                            (photoUrl, thumbnailUrl) = \
-                                self.report.prepare_copy_media(photo)
-                            thumbnailUrl = "/".join(['..']*3 + [thumbnailUrl])
-                            if win():
-                                thumbnailUrl = thumbnailUrl.replace('\\', "/")
-            url = self.report.build_url_fname_html(person.handle, "ppl", True)
-            if thumbnailUrl is None:
-                boxbg += Html("a", href=url, class_="noThumb") + person_name
-            else:
-                thumb = Html("span", class_="thumbnail") + \
-                    (Html("img", src=thumbnailUrl, alt="Image: "
-                          + person_name))
-                boxbg += Html("a", href=url) + thumb + person_name
-        shadow = Html("div", class_="shadow", inline=True,
-                      style="top: %dpx; left: %dpx;"
-                      % (top + _SHADOW, xoff + _SHADOW))
-
-        return [boxbg, shadow]
-
     def draw_box(self, center, col, person):
         """
         draw the box around the AncestorTree Individual name box...
@@ -1172,7 +1038,7 @@ class PersonPages(BasePage):
         """
         return self.draw_xy_box(_XOFFSET+node.x, _YOFFSET+node.y, col, person)
 
-    def extend_xy_line(self, x0, y0, w):
+    def extend_xy_line(self, coord_x0, coord_y0, w):
         """
         Draw a line 'half the distance out to the parents.  connect_line()
         will then draw the horizontal to the parent and the vertical connector
@@ -1184,9 +1050,9 @@ class PersonPages(BasePage):
         """
         style = "top: %dpx; left: %dpx; width: %dpx"
         bv = Html("div", class_="bvline", inline=True,
-                  style=style % (y0, x0, w))
+                  style=style % (coord_y0, coord_x0, w))
         gv = Html("div", class_="gvline", inline=True,
-                  style=style % (y0+_SHADOW, x0, w+_SHADOW))
+                  style=style % (coord_y0+_SHADOW, coord_x0, w+_SHADOW))
         return [bv, gv]
 
     def extend_node_line(self, c_node, p_node):
@@ -1198,25 +1064,43 @@ class PersonPages(BasePage):
     def extend_line(self, new_center, line_offset):
         return self.extend_xy_line(line_offset, new_center, _HGAP/2)
 
-    def connect_line(self, cx, cy, px, py):
+    def connect_line(self, coord_xc, coord_yc, coord_xp, coord_yp):
         """
         Draw the line horizontally back from the parent towards the child and
         then the vertical connecting this line to the line drawn towards us
         from the child.
 
-        @param: cx -- X coordinate for the child
-        @param: cy -- Y coordinate for the child
-        @param: px -- X coordinate for the parent
-        @param: py -- Y coordinate for the parent
+        @param: coord_cx -- X coordinate for the child
+        @param: coord_yp -- Y coordinate for the child
+        @param: coord_xp -- X coordinate for the parent
+        @param: coord_yp -- Y coordinate for the parent
         """
-        y = min(cy, py)
+        coord_y = min(coord_yc, coord_yp)
 
         # xh is the X co-ordinate half way between the two nodes.
         # dx is the X gap between the two nodes, remembering that the
         # the coordinates are for the LEFT of both nodes.
-        xh = (px + _WIDTH + cx)/2
-        dx = (px - _WIDTH - cx)/2
-        assert dx >= 0
+        coord_xh = (coord_xp + _WIDTH + coord_xc)/2
+        width_x = (coord_xp - _WIDTH - coord_xc)/2
+        assert width_x >= 0
+        stylew = "top: %dpx; left: %dpx; width: %dpx;"
+        styleh = "top: %dpx; left: %dpx; height: %dpx;"
+        cnct_bv = Html("div", class_="bvline", inline=True,
+                       style=stylew % (coord_yp, coord_xh, width_x))
+        cnct_gv = Html("div", class_="gvline", inline=True,
+                       style=stylew % (coord_yp+_SHADOW,
+                                       coord_xh+_SHADOW,
+                                       width_x))
+        cnct_bh = Html("div", class_="bhline", inline=True,
+                       style=styleh % (coord_y, coord_xh,
+                                       abs(coord_yp-coord_yc)))
+        cnct_gh = Html("div", class_="gvline", inline=True,
+                       style=styleh % (coord_y+_SHADOW,
+                                       coord_xh+_SHADOW,
+                                       abs(coord_yp-coord_yc)))
+        return [cnct_bv, cnct_gv, cnct_bh, cnct_gh]
+
+    def XXconnect_line(self, cx, cy, px, py):
         stylew = "top: %dpx; left: %dpx; width: %dpx;"
         styleh = "top: %dpx; left: %dpx; height: %dpx;"
         bv = Html("div", class_="bvline", inline=True,
@@ -1257,6 +1141,7 @@ class PersonPages(BasePage):
                           positions.
         @param: person -- person for whom we are drawing the box
         """
+        print(_("person: %s" % str(person)))
         assert gen > 0
         x1 = _XOFFSET + (gen - 1) * _WIDTH + (gen - 1) * _HGAP
         x2 = x1 + _WIDTH + _HGAP
@@ -1288,20 +1173,21 @@ class PersonPages(BasePage):
         family_tree = None
         if generations:
             if p_handle:
-                person = self.dbase_.get_person_from_handle(p_handle)
+                person = self.r_db.get_person_from_handle(p_handle)
                 if person is None:
                     return None
                 family_handle = person.get_main_parents_family_handle()
-                family = self.dbase_.get_family_from_handle(family_handle)
                 f_layout_tree = None
                 m_layout_tree = None
-                if family is not None:
-                    f_handle = family.get_father_handle()
-                    m_handle = family.get_mother_handle()
-                    f_layout_tree = self.create_layout_tree(
-                        f_handle, generations-1)
-                    m_layout_tree = self.create_layout_tree(
-                        m_handle, generations-1)
+                if family_handle:
+                    family = self.r_db.get_family_from_handle(family_handle)
+                    if family is not None:
+                        f_handle = family.get_father_handle()
+                        m_handle = family.get_mother_handle()
+                        f_layout_tree = self.create_layout_tree(
+                            f_handle, generations-1)
+                        m_layout_tree = self.create_layout_tree(
+                            m_handle, generations-1)
 
                 family_tree = LayoutTree(
                     p_handle, f_layout_tree, m_layout_tree)
@@ -1360,7 +1246,7 @@ class PersonPages(BasePage):
         @param: c_node        -- Child node of this parent
         """
         tree = []
-        person = self.dbase_.get_person_from_handle(l_node.handle())
+        person = self.r_db.get_person_from_handle(l_node.handle())
         if person is None:
             return None
 
@@ -1435,7 +1321,7 @@ class PersonPages(BasePage):
             tree = self.draw_box(new_center, 0, person)
         else:
             tree = self.draw_connected_box(old_center, new_center,
-                                           gen_nr-1, person_handle)
+                                           gen_nr-1, person)
 
         if gen_nr == maxgen:
             return tree
