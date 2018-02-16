@@ -6029,7 +6029,7 @@ class PersonPages(BasePage):
         """
         draw the box around the AncestorTree Individual name box...
         """
-        return self.draw_xy_box(_XOFFSET+node.x, node.y+_VGAP/2, col, person)
+        return self.draw_xy_box(node.x+_XOFFSET, node.y+_VGAP/2, col, person)
 
     def extend_xy_line(self, x0, y0, w):
         """
@@ -6215,7 +6215,7 @@ class PersonPages(BasePage):
         @param: c_node        -- Child node of this parent
         """
         tree = []
-        person = self.dbase_.get_person_from_handle(l_node.tree.node)
+        person = self.dbase_.get_person_from_handle(l_node.handle())
         if person is None:
             return None
 

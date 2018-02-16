@@ -32,15 +32,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-"""
-Narrative Web Page generator.
 
-Classe:
-    BuchheimTree - A tree suitable for passing to the Bushheim layout algorithm
-"""
+
 class LayoutTree:
-    def __init__(self, node=None, parent1=None, parent2=None):
-        self.node = node
+    """
+    Narrative Web Page generator.
+
+    Classe:
+        BuchheimTree - A tree suitable for passing to the Bushheim layout
+        algorithm
+    """
+    def __init__(self, handle, parent1, parent2):
+        self.handle = handle
         self.children = []
         for parent in [parent1, parent2]:
             if parent is not None:
@@ -54,6 +57,8 @@ class LayoutTree:
                 if child.node == key:
                     return child
 
-    def __iter__(self): return self.children.__iter__()
+    def __iter__(self):
+        return self.children.__iter__()
 
-    def __len__(self): return len(self.children)
+    def __len__(self):
+        return len(self.children)
